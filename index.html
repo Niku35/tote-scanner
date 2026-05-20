@@ -33,21 +33,22 @@
     background:rgba(79,142,247,.8);animation:sc 2s ease-in-out infinite}
   @keyframes sc{0%{top:6%}50%{top:90%}100%{top:6%}}
 
-  .bottom{background:rgba(0,0,0,.92);flex-shrink:0;padding:16px 16px 24px}
+  .bottom{background:rgba(0,0,0,.92);flex-shrink:0;padding:12px 16px 16px;
+    overflow-y:auto;max-height:45vh}
   .hint{font-size:13px;color:rgba(255,255,255,.5);text-align:center;line-height:1.5}
 
   /* Detected panel */
-  .det-panel{display:none;flex-direction:column;gap:12px}
+  .det-panel{display:none;flex-direction:column;gap:8px}
   .det-panel.on{display:flex}
   .det-lbl{font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.8px}
   .det-val{background:rgba(79,142,247,.15);border:1px solid rgba(79,142,247,.3);
-    border-radius:10px;padding:12px 14px;font-size:14px;font-family:monospace;
-    color:#7eb8ff;word-break:break-all;line-height:1.5}
+    border-radius:10px;padding:8px 12px;font-size:13px;font-family:monospace;
+    color:#7eb8ff;word-break:break-all;line-height:1.5;margin-bottom:4px}
   .det-btns{display:flex;gap:10px}
-  .btn-confirm{flex:1;padding:16px;background:#4f8ef7;color:#fff;border:none;
-    border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:-.2px}
+  .btn-confirm{flex:1;padding:13px;background:#4f8ef7;color:#fff;border:none;
+    border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:-.2px}
   .btn-confirm:active{opacity:.85;transform:scale(.98)}
-  .btn-rescan{padding:16px 18px;background:#22263a;color:#8a90b0;border:none;
+  .btn-rescan{padding:13px 16px;background:#22263a;color:#8a90b0;border:none;
     border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
 
   .no-sup{font-size:13px;color:rgba(255,255,255,.4);text-align:center;
