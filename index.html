@@ -7,7 +7,7 @@
 <style>
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   body{background:#000;color:#fff;font-family:-apple-system,sans-serif;
-    height:100vh;display:flex;flex-direction:column;overflow:hidden}
+    height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 
   .top{display:flex;align-items:center;justify-content:space-between;
     padding:14px 16px;background:rgba(0,0,0,.85);flex-shrink:0;
@@ -17,8 +17,10 @@
     width:36px;height:36px;color:#fff;font-size:18px;cursor:pointer;
     display:flex;align-items:center;justify-content:center}
 
-  .vid-wrap{position:relative;overflow:hidden;background:#000;height:38vh;flex-shrink:0}
+  /* Camera: fixed 40% of screen height */
+  .vid-wrap{position:relative;height:40vh;flex-shrink:0;overflow:hidden;background:#000}
   video{width:100%;height:100%;object-fit:cover;display:block}
+  canvas#snapCanvas{display:none}
   .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
   .qr-frame{position:relative;width:65%;aspect-ratio:1;box-shadow:0 0 0 9999px rgba(0,0,0,.52)}
   .qr-frame::before,.qr-frame::after{content:"";position:absolute;width:22px;height:22px;
@@ -33,27 +35,29 @@
     background:rgba(79,142,247,.8);animation:sc 2s ease-in-out infinite}
   @keyframes sc{0%{top:6%}50%{top:90%}100%{top:6%}}
 
-  .bottom{background:rgba(0,0,0,.92);flex-shrink:0;padding:12px 16px 16px;
-    overflow-y:auto;max-height:45vh}
-  .hint{font-size:13px;color:rgba(255,255,255,.5);text-align:center;line-height:1.5}
+  /* Bottom: takes ALL remaining space, buttons always visible */
+  .bottom{flex:1;background:rgba(0,0,0,.92);padding:20px 16px;
+    display:flex;flex-direction:column;justify-content:center;
+    overflow-y:auto}
 
-  /* Detected panel */
-  .det-panel{display:none;flex-direction:column;gap:8px}
+  .hint{font-size:14px;color:rgba(255,255,255,.5);text-align:center;line-height:1.6}
+  .err-msg{font-size:13px;color:#f76b6b;text-align:center;line-height:1.5;display:none}
+
+  .det-panel{display:none;flex-direction:column;gap:12px}
   .det-panel.on{display:flex}
   .det-lbl{font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.8px}
   .det-val{background:rgba(79,142,247,.15);border:1px solid rgba(79,142,247,.3);
-    border-radius:10px;padding:8px 12px;font-size:13px;font-family:monospace;
-    color:#7eb8ff;word-break:break-all;line-height:1.5;margin-bottom:4px}
+    border-radius:10px;padding:10px 14px;font-size:14px;font-family:monospace;
+    color:#7eb8ff;word-break:break-all;line-height:1.5}
   .det-btns{display:flex;gap:10px}
-  .btn-confirm{flex:1;padding:13px;background:#4f8ef7;color:#fff;border:none;
-    border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:-.2px}
-  .btn-confirm:active{opacity:.85;transform:scale(.98)}
-  .btn-rescan{padding:13px 16px;background:#22263a;color:#8a90b0;border:none;
-    border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
-
-  .no-sup{font-size:13px;color:rgba(255,255,255,.4);text-align:center;
-    line-height:1.7;padding:8px 0;display:none}
-  .err-msg{font-size:13px;color:#f76b6b;text-align:center;line-height:1.5;display:none}
+  .btn-confirm{flex:1;padding:16px;background:#4f8ef7;color:#fff;border:none;
+    border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;
+    -webkit-appearance:none}
+  .btn-confirm:active{opacity:.85}
+  .btn-rescan{padding:16px 18px;background:#22263a;color:#8a90b0;border:none;
+    border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;
+    -webkit-appearance:none}
+  .btn-rescan:active{opacity:.75}
 </style>
 </head>
 <body>
@@ -65,6 +69,7 @@
 
 <div class="vid-wrap">
   <video id="vid" playsinline autoplay muted></video>
+  <canvas id="snapCanvas"></canvas>
   <div class="overlay">
     <div class="qr-frame">
       <div class="cbl"></div><div class="cbr"></div>
@@ -76,11 +81,6 @@
 <div class="bottom">
   <div class="hint" id="hint">Starting camera…</div>
   <div class="err-msg" id="errMsg"></div>
-  <div class="no-sup" id="noSup">
-    QR detection not supported on this browser.<br>
-    <small>Please use Chrome on Android.</small>
-  </div>
-
   <div class="det-panel" id="detPanel">
     <div>
       <div class="det-lbl">Detected value</div>
@@ -93,64 +93,62 @@
   </div>
 </div>
 
+<!-- jsQR works on iOS Safari + Android Chrome -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script>
-var scanned = null;
-var stream  = null;
-var detector = null;
-var raf = null;
-var fieldId = '';
+var scanned  = null;
+var stream   = null;
+var raf      = null;
+var scanning = false;
+var fieldId  = '';
 
-// Read field from URL param
 var params = new URLSearchParams(window.location.search);
-fieldId = params.get('field') || 'iTote';
+fieldId    = params.get('field') || 'iTote';
 
-var labels = { iTote: 'Scan Tote QR', iQr: 'Scan Order QR', rTote: 'Scan Tote QR' };
+var labels = { iTote:'Scan Tote QR', iQr:'Scan Order QR', rTote:'Scan Tote QR' };
 document.getElementById('pageTitle').textContent = labels[fieldId] || 'Scan QR Code';
 
-// Start camera
+var vid    = document.getElementById('vid');
+var canvas = document.getElementById('snapCanvas');
+var ctx    = canvas.getContext('2d', { willReadFrequently: true });
+
 navigator.mediaDevices.getUserMedia({
-  video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+  video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+  audio: false
 }).then(function(s) {
   stream = s;
-  var vid = document.getElementById('vid');
   vid.srcObject = s;
   vid.onloadedmetadata = function() {
-    vid.play();
-    if ('BarcodeDetector' in window) {
-      try { detector = new BarcodeDetector({ formats: ['qr_code'] }); }
-      catch(e) { try { detector = new BarcodeDetector(); } catch(e2) { showNoSupport(); return; } }
+    vid.play().then(function() {
       document.getElementById('hint').textContent = 'Point camera at QR code…';
+      scanning = true;
       loop();
-    } else {
-      showNoSupport();
-    }
+    }).catch(showErr);
   };
-}).catch(function(e) {
-  document.getElementById('hint').style.display = 'none';
-  document.getElementById('errMsg').textContent = 'Camera error: ' + e.message;
-  document.getElementById('errMsg').style.display = 'block';
-});
+}).catch(showErr);
 
 function loop() {
-  if (!detector || !stream) return;
-  var vid = document.getElementById('vid');
-  if (vid.readyState < 2) { raf = requestAnimationFrame(loop); return; }
-  detector.detect(vid).then(function(results) {
-    if (results && results.length > 0) {
-      scanned = results[0].rawValue;
-      if (navigator.vibrate) navigator.vibrate(80);
-      document.getElementById('hint').style.display = 'none';
-      document.getElementById('detVal').textContent = scanned;
-      document.getElementById('detPanel').className = 'det-panel on';
-    } else {
-      raf = requestAnimationFrame(loop);
-    }
-  }).catch(function() { raf = requestAnimationFrame(loop); });
+  if (!scanning) return;
+  if (vid.readyState < 2 || vid.videoWidth === 0) { raf = requestAnimationFrame(loop); return; }
+  canvas.width  = vid.videoWidth;
+  canvas.height = vid.videoHeight;
+  ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+  var img    = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  var result = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+  if (result && result.data) {
+    scanned  = result.data;
+    scanning = false;
+    if (navigator.vibrate) navigator.vibrate(80);
+    document.getElementById('hint').style.display = 'none';
+    document.getElementById('detVal').textContent  = scanned;
+    document.getElementById('detPanel').className  = 'det-panel on';
+  } else {
+    raf = requestAnimationFrame(loop);
+  }
 }
 
 function confirmScan() {
   if (!scanned) return;
-  // postMessage to opener — both are on script.google.com so same origin
   if (window.opener && !window.opener.closed) {
     window.opener.postMessage({ type: 'SCAN_RESULT', field: fieldId, value: scanned }, '*');
   }
@@ -159,26 +157,26 @@ function confirmScan() {
 }
 
 function rescan() {
-  scanned = null;
+  scanned  = null;
+  scanning = true;
   document.getElementById('detPanel').className = 'det-panel';
   document.getElementById('hint').style.display = 'block';
-  document.getElementById('hint').textContent = 'Point camera at QR code…';
+  document.getElementById('hint').textContent   = 'Point camera at QR code…';
   loop();
 }
 
-function showNoSupport() {
-  document.getElementById('hint').style.display = 'none';
-  document.getElementById('noSup').style.display = 'block';
-}
-
 function stopCam() {
-  if (raf) { cancelAnimationFrame(raf); raf = null; }
+  scanning = false;
+  if (raf)    { cancelAnimationFrame(raf); raf = null; }
   if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
 }
 
-function closeScanner() {
-  stopCam();
-  window.close();
+function closeScanner() { stopCam(); window.close(); }
+
+function showErr(e) {
+  document.getElementById('hint').style.display   = 'none';
+  document.getElementById('errMsg').textContent   = 'Camera error: ' + (e && e.message ? e.message : String(e));
+  document.getElementById('errMsg').style.display = 'block';
 }
 </script>
 </body>
